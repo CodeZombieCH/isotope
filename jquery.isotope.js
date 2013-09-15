@@ -519,7 +519,12 @@
     // ====================== Filtering ======================
 
     _filter : function( $atoms ) {
-      var filter = this.options.filter === '' ? '*' : this.options.filter;
+        var filter = this.options.filter === '' ? '*' : this.options.filter;
+
+        // If the filter is an object use the extended filter
+        if (typeof filter === 'object') {
+            return this._filterExtended($atoms);
+        }
 
       if ( !filter ) {
         return $atoms;
@@ -540,6 +545,40 @@
       $atomsToShow.removeClass( hiddenClass );
 
       return $atoms.filter( filter );
+    },
+
+    _filterExtended: function ($atoms) {
+        var instance = this,
+            filter = this.options.filter,
+            getSortData = this.options.getSortData;
+
+        var applyFilter = function (index, element) {
+        	// TODO: Add support for boolean, string, numeric filters
+
+            // Get the value of the current element based on the getSortData user-defined function
+            // In order to avoid writing another data provider I reused the getSortData function,
+            // although the name might lead to some confusions.
+            var value = getSortData[filter.attribute]($(element), instance);
+
+            // Apply range filter (currently hard coded)
+            return (value >= filter.value[0] && value <= filter.value[1]);
+        }
+
+        var hiddenClass = this.options.hiddenClass,
+            hiddenSelector = '.' + hiddenClass,
+            $hiddenAtoms = $atoms.filter(hiddenSelector),
+            $atomsToShow = $hiddenAtoms;
+
+        if (filter !== '*') {
+            $atomsToShow = $hiddenAtoms.filter(applyFilter); // Hidden elements that match the filter -> show them again
+            var $atomsToHide = $atoms.not(hiddenSelector).not(applyFilter).addClass(hiddenClass);
+            this.styleQueue.push({ $el: $atomsToHide, style: this.options.hiddenStyle });
+        }
+
+        this.styleQueue.push({ $el: $atomsToShow, style: this.options.visibleStyle });
+        $atomsToShow.removeClass(hiddenClass);
+
+        return $atoms.filter(applyFilter);
     },
 
     // ====================== Sorting ======================
@@ -1388,7 +1427,7 @@
         // apply method
         instance[ options ].apply( instance, args );
       });
-    } else {
+    } else{ 
       this.each(function() {
         var instance = $.data( this, 'isotope' );
         if ( instance ) {
