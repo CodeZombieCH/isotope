@@ -14,6 +14,14 @@
 /*jshint asi: true, browser: true, curly: true, eqeqeq: true, forin: false, immed: false, newcap: true, noempty: true, strict: true, undef: true */
 /*global jQuery: false */
 
+var GenericFilter = function (type, attribute, value) {
+    this.type = type;
+    this.attribute = attribute;
+    this.value = value;
+};
+
+
+
 (function( window, $, undefined ){
 
   'use strict';
@@ -312,7 +320,6 @@
   };
 
 
-
 // ========================= Isotope ===============================
 
 
@@ -519,12 +526,12 @@
     // ====================== Filtering ======================
 
     _filter : function( $atoms ) {
-        var filter = this.options.filter === '' ? '*' : this.options.filter;
+      var filter = this.options.filter === '' ? '*' : this.options.filter;
 
-        // If the filter is an object use the extended filter
-        if (typeof filter === 'object') {
-            return this._filterExtended($atoms);
-        }
+      // If the filter is an object use the extended filter
+      if (typeof filter === 'object') {
+          return this._filterExtended($atoms);
+      }
 
       if ( !filter ) {
         return $atoms;
@@ -547,38 +554,120 @@
       return $atoms.filter( filter );
     },
 
+    _filterCheckCounter: 0,
     _filterExtended: function ($atoms) {
-        var instance = this,
-            filter = this.options.filter,
-            getSortData = this.options.getSortData;
+      console.time('_filterExtended');
 
-        var applyFilter = function (index, element) {
-        	// TODO: Add support for boolean, string, numeric filters
+      var instance = this,
+        filters = this.options.filter,
+        getSortData = this.options.getSortData;
 
-            // Get the value of the current element based on the getSortData user-defined function
-            // In order to avoid writing another data provider I reused the getSortData function,
-            // although the name might lead to some confusions.
-            var value = getSortData[filter.attribute]($(element), instance);
+      // Reset filter check counter
+      this._filterCheckCounter = 0;
 
-            // Apply range filter (currently hard coded)
-            return (value >= filter.value[0] && value <= filter.value[1]);
+      var applyFilter = function (index, element) {
+        console.time('applyFilter');
+        // TODO: Add support for boolean, string, numeric filters
+
+        // Whenever a criteria is not matched, return false
+        // Do not return true if a criteria is matched to allow the other filters to check it
+
+        for (var key in filters) {
+          var filter = filters[key];
+
+          // Ignore filter if empty/undefined/null/not set
+          if (!filter.value) continue;
+
+
+          // Get the value of the current element based on the getSortData user-defined function
+          // In order to avoid writing another data provider I reused the getSortData function,
+          // although the name might lead to some confusions.
+          var value = getSortData[filter.attribute]($(element), instance);
+
+          instance._filterCheckCounter++;
+          //console.log('# ' + instance._filterCheckCounter + ' Checking filter {' + filter.attribute + ', ' + filter.value + '} for value "' + value + '" on element "' + getSortData['name']($(element), instance) + '"');
+
+          switch (filter.type) {
+            case 'range':
+              if (!(value >= filter.value[0] && value <= filter.value[1]))
+                return false;
+              break;
+            case 'text':
+              if (value.toLocaleLowerCase().indexOf(filter.value.toLocaleLowerCase()) < 0)
+                return false;
+              break;
+            case 'tag':
+              var values = value.split(' ');
+              if (values.indexOf(filter.value) < 0)
+                return false;
+              break;
+            default:
+              console.log('not supported');
+              return false;
+          }
         }
 
-        var hiddenClass = this.options.hiddenClass,
-            hiddenSelector = '.' + hiddenClass,
-            $hiddenAtoms = $atoms.filter(hiddenSelector),
-            $atomsToShow = $hiddenAtoms;
+        console.timeEnd('applyFilter');
+        return true;
+      }
 
-        if (filter !== '*') {
-            $atomsToShow = $hiddenAtoms.filter(applyFilter); // Hidden elements that match the filter -> show them again
-            var $atomsToHide = $atoms.not(hiddenSelector).not(applyFilter).addClass(hiddenClass);
-            this.styleQueue.push({ $el: $atomsToHide, style: this.options.hiddenStyle });
-        }
+      var hiddenClass = this.options.hiddenClass,
+        hiddenSelector = '.' + hiddenClass,
+        $hiddenAtoms = $atoms.filter(hiddenSelector),
+        $atomsToShow = $hiddenAtoms;
 
-        this.styleQueue.push({ $el: $atomsToShow, style: this.options.visibleStyle });
-        $atomsToShow.removeClass(hiddenClass);
+      // Apply the filters on all elements and cache the result set
+      console.time('Applying filter');
+      var $elementsToShow = $atoms.filter(applyFilter);
+      console.timeEnd('Applying filter');
 
-        return $atoms.filter(applyFilter);
+      // Calculate elements to hide
+      if (filters !== '*') {
+
+        // OLD
+        console.time('OLD: $atomsToShow');
+        $atomsToShow = $hiddenAtoms.filter(applyFilter); // Hidden elements that match the filter -> show them again
+        console.timeEnd('OLD: $atomsToShow');
+        console.log('OLD: $atomsToShow = ' + $atomsToShow.length);
+
+        // NEW
+        console.time('NEW: $atomsToShow');
+        $atomsToShow = $elementsToShow.filter(hiddenSelector); // Checked, works as replacement
+        console.timeEnd('NEW: $atomsToShow');
+        console.log('NEW: $atomsToShow = ' + $atomsToShow.length);
+
+
+        var $atomsToHide;
+        // OLD
+        console.time('OLD: $atomsToHide');
+        $atomsToHide = $atoms.not(hiddenSelector).not(applyFilter);
+        console.timeEnd('OLD: $atomsToHide');
+        console.log('OLD: $atomsToHide = ' + $atomsToHide.length);
+
+        // NEW
+        console.time('NEW: $atomsToHide');
+        $atomsToHide = $atoms.not($elementsToShow).not(hiddenSelector);  // Checked, works as replacement
+        console.timeEnd('NEW: $atomsToHide');
+        console.log('NEW: $atomsToHide = ' + $atomsToHide.length);
+
+        $atomsToHide.addClass(hiddenClass);
+
+        this.styleQueue.push({ $el: $atomsToHide, style: this.options.hiddenStyle });
+      }
+
+      // Calculate elements to show
+      this.styleQueue.push({ $el: $atomsToShow, style: this.options.visibleStyle });
+      $atomsToShow.removeClass(hiddenClass);
+
+      console.log('this._filterCheckCounter = ' + this._filterCheckCounter);
+      console.timeEnd('_filterExtended');
+
+
+      // OLD
+      //return $atoms.filter(applyFilter);
+
+      // NEW
+      return $elementsToShow;
     },
 
     // ====================== Sorting ======================
