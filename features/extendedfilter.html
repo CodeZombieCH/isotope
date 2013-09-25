@@ -5,11 +5,13 @@
 	<meta charset="utf-8" />
 	<title>Extended filter</title>
 
-	<link rel="stylesheet" href="../css/style.css" />
+	<link rel="stylesheet" href="../css/style.css">
 	<link rel="stylesheet" href="../css/ui-lightness/jquery-ui-1.10.3.custom.css">
+	<link rel="stylesheet" href="../css/jquery.nouislider.css">
 
 	<script src="../js/jquery-1.7.1.min.js"></script>
 	<script src="../js/jquery-ui-1.10.3.custom.js"></script>
+	<script src="../js/jquery.nouislider.min.js"></script>
 	<script src="../jquery.isotope.js"></script>
 
 	<script>
@@ -56,13 +58,15 @@
 			var weightFilter = {
 				element: null,
 				apply: function() {
-					var range = this.element.slider("option", "values");
+					//var range = this.element.slider("option", "values");
+					var range = this.element.val();
 					filterManager.set('bar', { attribute: 'weight', type: 'range', value: range });
 					filterManager.apply();
 				}
 			};
 
-			// Slider
+			// jQuery UI Slider
+			/*
 			var updateWeight = function (event, ui) {
 				$("#weight").val(ui.values[0] + " - " + ui.values[1]);
 			};
@@ -79,6 +83,32 @@
 			weightFilter.element = $("#weight-slider");
 
 			updateWeight(null, { values: [0, 300] });
+			*/
+
+
+			// noUiSlider
+			var updateWeight = function (e) {
+				$("#weight").val(parseInt(weightFilter.element.val()[0]) + " - " + parseInt(weightFilter.element.val()[1]));
+			}
+
+			$('#weight-slider').noUiSlider({
+				range: [0, 300],
+				start: [0, 300],
+				step: 1,
+				slide: updateWeight,
+				/* Not supported, you have listen to a 'change' event manually
+				change: function (e) {
+					weightFilter.apply();
+				}
+				*/
+			});
+
+			weightFilter.element = $('#weight-slider');
+			weightFilter.element.bind('change', function (e) {
+				weightFilter.apply();
+			});
+
+			updateWeight();
 
 
 			var $optionSets = $('#options .option-set'),
@@ -136,7 +166,8 @@
 					name: function ($elem) {
 						return $elem.find('.name').text();
 					}
-				}
+				},
+				sortBy: 'number'
 			})
 		});
 	</script>
