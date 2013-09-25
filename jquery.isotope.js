@@ -14,6 +14,10 @@
 /*jshint asi: true, browser: true, curly: true, eqeqeq: true, forin: false, immed: false, newcap: true, noempty: true, strict: true, undef: true */
 /*global jQuery: false */
 
+console.time = console.time || function(){};
+console.timeEnd = console.timeEnd || function(){};
+
+
 var GenericFilter = function (type, attribute, value) {
     this.type = type;
     this.attribute = attribute;
